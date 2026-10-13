@@ -1,0 +1,4 @@
+Symbol,Name,Group,Fractional Shares,Target Percentage
+VOO,Vanguard S&P 500,Core ETF,TRUE,50
+UBER,Uber,Bets,FALSE,25
+TSLA,Tesla,Bets,FALSE,25
