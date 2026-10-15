@@ -6,18 +6,15 @@ It computes a plan; it does not place trades or fetch live prices.
 
 ## Install from GitHub
 
-After pushing this project to GitHub, replace `OWNER` below with the repository
-owner:
-
 ```sh
-uv tool install git+https://github.com/OWNER/finance-tools.git
+uv tool install git+https://github.com/zehuac2/finance-tools.git
 finance-tools --help
 ```
 
 Or run without a persistent installation:
 
 ```sh
-uvx --from git+https://github.com/OWNER/finance-tools.git finance-tools rebalance \
+uvx --from git+https://github.com/zehuac2/finance-tools.git finance-tools rebalance \
   --targets targets.csv \
   --holdings holdings.csv \
   --buying-power 1000
