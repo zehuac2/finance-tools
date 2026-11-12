@@ -1,14 +1,15 @@
 """Buy-only planning adapted from my_agent_workspace.rebalance.
 
-Distribute cash proportionally to target deficits, with whole-share sizing and
-a $1 minimum order. CSV parsing and arithmetic use the standard library.
+Distribute cash proportionally to target deficits. Every buy is rounded down
+to a whole number of shares; a buy that rounds to zero is omitted, as are
+orders below $1. CSV parsing and arithmetic use the standard library.
 """
 
 from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_HALF_EVEN
+from decimal import Decimal, InvalidOperation, ROUND_HALF_EVEN
 from pathlib import Path
 
 
@@ -140,10 +141,12 @@ def compute_plan(
     positions: dict[str, Decimal],
     prices: dict[str, Decimal],
 ) -> dict:
-    """Compute the original proportional-deficit plan without exceeding cash.
+    """Compute a proportional-deficit plan without exceeding cash.
 
     Holdings outside the target CSV contribute to portfolio value, but receive
     no orders. Missing quotes for unheld targets produce skipped entries.
+    Every purchase is a whole number of shares, rounded down, including
+    symbols marked fractional in the target CSV.
     """
     total_value = buying_power + sum(
         (quantity * prices.get(symbol, Decimal(0)) for symbol, quantity in positions.items()),
@@ -182,23 +185,12 @@ def compute_plan(
             "fractional": target.fractional,
         }
 
-        if target.fractional:
-            amount = min(
-                allocation.quantize(CENT, rounding=ROUND_HALF_EVEN),
-                remaining.quantize(CENT, rounding=ROUND_DOWN),
-            )
-            if amount < 1:
-                continue
+        quantity = int(min(allocation, remaining) // price)
+        amount = quantity * price
+        if quantity < 1 or amount < 1:
+            continue
 
-            order = {**base, "dollar_amount": f"{amount:.2f}", "est_cost": _round2(amount)}
-        else:
-            quantity = int(min(allocation, remaining) / price)
-            amount = quantity * price
-            if quantity < 1 or amount < 1:
-                continue
-
-            order = {**base, "quantity": quantity, "est_cost": _round2(amount)}
-
+        order = {**base, "quantity": quantity, "est_cost": _round2(amount)}
         orders.append(order)
         remaining -= amount
 
@@ -230,11 +222,7 @@ def render_summary(plan: dict) -> str:
         lines.append(group)
 
         for order in orders:
-            if order["fractional"]:
-                unit = f"${order['dollar_amount']}"
-            else:
-                unit = f"{order['quantity']} sh (~${order['est_cost']:.2f})"
-
+            unit = f"{order['quantity']} sh (~${order['est_cost']:.2f})"
             current = f"{order['current_pct']:.1f}".rjust(5)
             target = f"{order['target_pct']:g}".rjust(3)
             lines.append(f"  {order['symbol']:<6} {current}% → {target}%   buy {unit}")
