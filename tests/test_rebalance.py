@@ -35,11 +35,12 @@ class RebalanceTests(unittest.TestCase):
     def test_original_happy_path(self):
         plan = self.plan()
         self.assertEqual(plan["total_portfolio_value"], 1540)
-        self.assertEqual(plan["allocated"], 830)
-        self.assertEqual(plan["unallocated"], 170)
-        self.assertEqual(plan["orders"][0]["dollar_amount"], "230.00")
-        self.assertEqual(plan["orders"][1]["quantity"], 5)
-        self.assertEqual(plan["orders"][2]["quantity"], 1)
+        self.assertEqual(plan["allocated"], 600)
+        self.assertEqual(plan["unallocated"], 400)
+        self.assertEqual([order["symbol"] for order in plan["orders"]], ["UBER", "TSLA"])
+        self.assertEqual([order["quantity"] for order in plan["orders"]], [5, 1])
+        self.assertEqual([order["est_cost"] for order in plan["orders"]], [350, 250])
+        self.assertTrue(all("dollar_amount" not in order for order in plan["orders"]))
 
     def test_overweight_position_is_never_sold(self):
         plan = self.plan("100", positions={"VOO": Decimal(10)})
@@ -58,6 +59,7 @@ class RebalanceTests(unittest.TestCase):
 
     def test_fresh_account_tracks_weights(self):
         plan = self.plan(positions={}, prices=dict.fromkeys(self.prices, Decimal(50)))
+        self.assertEqual([order["quantity"] for order in plan["orders"]], [10, 5, 5])
         self.assertEqual([order["est_cost"] for order in plan["orders"]], [500, 250, 250])
 
     def test_zero_cash(self):
@@ -65,15 +67,36 @@ class RebalanceTests(unittest.TestCase):
         self.assertEqual(plan["orders"], [])
         self.assertEqual(plan["allocated"], 0)
 
-    def test_rounding_does_not_overspend(self):
+    def test_share_quantity_rounds_down_without_overspend(self):
+        targets = [Target("UBER", "", "Bets", False, Decimal("100"))]
+        plan = compute_plan(targets, Decimal("200"), {}, {"UBER": Decimal("70")})
+        self.assertEqual(plan["orders"][0]["quantity"], 2)
+        self.assertEqual(plan["orders"][0]["est_cost"], 140)
+        self.assertEqual(plan["allocated"], 140)
+        self.assertEqual(plan["unallocated"], 60)
+
+    def test_fractional_symbols_buy_whole_shares_only(self):
         targets = [
-            Target("A", "", "", True, Decimal("50")),
-            Target("B", "", "", True, Decimal("50")),
+            Target("A", "", "Core", True, Decimal("50")),
+            Target("B", "", "Core", True, Decimal("50")),
         ]
-        plan = compute_plan(targets, Decimal("3.03"), {}, {"A": Decimal(1), "B": Decimal(1)})
-        self.assertEqual([order["dollar_amount"] for order in plan["orders"]], ["1.52", "1.51"])
-        self.assertEqual(plan["allocated"], 3.03)
-        self.assertEqual(plan["unallocated"], 0)
+        plan = compute_plan(targets, Decimal("10"), {}, {"A": Decimal("3"), "B": Decimal("3")})
+        self.assertEqual([order["quantity"] for order in plan["orders"]], [1, 1])
+        self.assertTrue(all("dollar_amount" not in order for order in plan["orders"]))
+        self.assertEqual(plan["allocated"], 6)
+        self.assertEqual(plan["unallocated"], 4)
+
+    def test_buy_that_rounds_to_zero_shares_is_dropped(self):
+        targets = [
+            Target("A", "", "Core", True, Decimal("50")),
+            Target("B", "", "Bets", False, Decimal("50")),
+        ]
+        plan = compute_plan(targets, Decimal("100"), {}, {"A": Decimal("80"), "B": Decimal("10")})
+        self.assertEqual([order["symbol"] for order in plan["orders"]], ["B"])
+        self.assertEqual(plan["orders"][0]["quantity"], 5)
+        self.assertNotIn("dollar_amount", plan["orders"][0])
+        self.assertEqual(plan["allocated"], 50)
+        self.assertEqual(plan["unallocated"], 50)
 
     def test_outside_holdings_contribute_to_total_value(self):
         positions = {**self.positions, "OTHER": Decimal(2)}
@@ -149,8 +172,10 @@ class CliTests(unittest.TestCase):
             self.assertEqual(main(self.args() + ["--json"]), 0)
 
         plan = json.loads(output.getvalue())
-        self.assertEqual(plan["allocated"], 830)
-        self.assertIn("Core ETF", plan["summary"])
+        self.assertEqual(plan["allocated"], 600)
+        self.assertEqual(plan["orders"][0]["quantity"], 5)
+        self.assertIn("buy 5 sh", plan["summary"])
+        self.assertNotIn("dollar_amount", plan["summary"])
 
         output = io.StringIO()
         with contextlib.redirect_stdout(output):

@@ -33,9 +33,9 @@ finance-tools rebalance \
 ```
 
 Add `--json` for structured output containing `orders`, `skipped`, a `summary`,
-and portfolio/cash totals. Fractional orders have a two-decimal `dollar_amount`
-string; whole-share orders have an integer `quantity`. Both include `est_cost`,
-`current_pct`, `target_pct`, `symbol`, `group`, and `fractional`.
+and portfolio/cash totals. Every order buys a whole number of shares and has an
+integer `quantity`, plus `est_cost`, `current_pct`, `target_pct`, `symbol`,
+`group`, and `fractional`.
 
 ### Targets CSV
 
@@ -51,6 +51,7 @@ TSLA,Tesla,Bets,FALSE,25
 All five headers are required; `Name` and `Group` values may be blank.
 Percentages must be finite, between 0 and 100, and sum to 100 within 0.01.
 Fractional flags accept `TRUE`/`FALSE` or `YES`/`NO`, case-insensitively.
+The flag is kept on each order. Buys are whole shares either way.
 
 ### Holdings CSV
 
@@ -78,13 +79,14 @@ file with the header is valid, but supplies no prices.
 Total portfolio value includes all holdings plus available cash, including
 holdings outside the target CSV. Only target symbols receive buy orders.
 Available cash is distributed proportionally to positive target deficits;
-positions already at or above target receive no orders. Whole-share quantities
-are rounded down, and orders below $1 are omitted, matching the original logic.
+positions already at or above target receive no orders. Every buy, including
+symbols marked fractional, is rounded down to a whole number of shares. A buy
+that rounds to zero shares is omitted, and orders below $1 are omitted.
 Cash reserved for missing quotes or unaffordable shares remains unallocated;
 leftovers are not redistributed.
 
-Calculations use decimal arithmetic. Fractional dollar orders are rounded to
-cents and capped by remaining cash, avoiding the original rounding overspend.
+Calculations use decimal arithmetic. Share counts use floor division, so an
+order's cost never exceeds its allocation or the cash still available.
 Cash must be nonnegative and in whole cents. Costs and totals are estimates,
 displayed to two decimals; holdings CSV prices may have greater precision.
 
