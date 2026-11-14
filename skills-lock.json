@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "skills": {
+    "github-actions": {
+      "source": "zehuac2/tech-skills",
+      "sourceType": "github",
+      "skillPath": "skills/github-actions/SKILL.md",
+      "computedHash": "a0d50cb69b2e9ea7c2b80d6a9dbb111c3ba720c8cc49b3e050f6394e1092b622"
+    }
+  }
+}
