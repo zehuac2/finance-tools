@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Actions"
+  short_description: "Guidance for creating and editing GitHub Actions workflows"
+  default_prompt: "Use $github-actions to create a workflow for this project."
