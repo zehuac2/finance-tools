@@ -5,8 +5,7 @@
       "source": "zehuac2/tech-skills",
       "sourceType": "github",
       "skillPath": "skills/github-actions/SKILL.md",
-      "computedHash": "02bcb7eef8a5c78dca99fd65783dce47fa087b8cd14e70c5a5682e141274fc4c",
-      "installMode": "copy"
+      "computedHash": "02bcb7eef8a5c78dca99fd65783dce47fa087b8cd14e70c5a5682e141274fc4c"
     }
   }
 }
