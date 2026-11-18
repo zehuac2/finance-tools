@@ -21,4 +21,6 @@ jobs:
         run: uv sync
 
       - name: Run unit tests
+        env:
+          HYPOTHESIS_PROFILE: ci
         run: uv run python -m unittest discover -s tests -v
