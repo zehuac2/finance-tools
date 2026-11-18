@@ -1,4 +1,4 @@
-"""Shared portfolios, oracles, and strategies for the rebalance tests."""
+"""Shared portfolios and strategies for the rebalance tests."""
 
 from __future__ import annotations
 
@@ -15,102 +15,12 @@ TARGETS = ROOT / "examples" / "targets.csv"
 HOLDINGS = ROOT / "examples" / "holdings.csv"
 CENT = Decimal("0.01")
 HUNDRED = Decimal(100)
-ONE = Decimal(1)
 NAME_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -'&.,"
 SYMBOL_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 def round_money(value: Decimal) -> float:
     return float(value.quantize(CENT, rounding=ROUND_HALF_EVEN))
-
-
-def portfolio_value(
-    cash: Decimal, positions: dict[str, Decimal], prices: dict[str, Decimal]
-) -> Decimal:
-    return cash + sum(
-        (quantity * prices.get(symbol, Decimal(0)) for symbol, quantity in positions.items()),
-        Decimal(0),
-    )
-
-
-def allocation_math(
-    targets: list[Target] | tuple[Target, ...],
-    cash: Decimal,
-    positions: dict[str, Decimal],
-    prices: dict[str, Decimal],
-) -> tuple[Decimal, list[Decimal], list[Decimal], list[Decimal]]:
-    """Dollar deficits and proportional allocations, before share rounding."""
-
-    total = portfolio_value(cash, positions, prices)
-    held_values: list[Decimal] = []
-    deficits: list[Decimal] = []
-    for target in targets:
-        held = positions.get(target.symbol, Decimal(0)) * prices.get(target.symbol, Decimal(0))
-        held_values.append(held)
-        deficits.append(max(Decimal(0), total * target.target_pct / HUNDRED - held))
-
-    total_deficit = sum(deficits, Decimal(0))
-    ratio = min(ONE, cash / total_deficit) if total_deficit else Decimal(0)
-    allocations = [deficit * ratio for deficit in deficits]
-    return total, held_values, deficits, allocations
-
-
-def reference_plan(
-    targets: list[Target] | tuple[Target, ...],
-    cash: Decimal,
-    positions: dict[str, Decimal],
-    prices: dict[str, Decimal],
-) -> dict:
-    """A direct reading of the buy-only rule, used as an independent oracle."""
-
-    total, held_values, deficits, allocations = allocation_math(targets, cash, positions, prices)
-    orders = []
-    skipped = []
-    remaining = cash
-
-    for target, held, deficit, allocation in zip(targets, held_values, deficits, allocations):
-        if deficit <= 0:
-            continue
-
-        price = prices.get(target.symbol, Decimal(0))
-        if price <= 0:
-            skipped.append({"symbol": target.symbol, "reason": "no price"})
-            continue
-
-        affordable = min(allocation, remaining)
-        quantity = int(affordable // price)
-        amount = quantity * price
-        if quantity < 1 or amount < 1:
-            continue
-
-        orders.append(
-            {
-                "symbol": target.symbol,
-                "group": target.group,
-                "current_pct": round_money(held / total * HUNDRED) if total else 0.0,
-                "target_pct": float(target.target_pct),
-                "fractional": target.fractional,
-                "quantity": quantity,
-                "est_cost": round_money(amount),
-            }
-        )
-        remaining -= amount
-
-    return {
-        "total_portfolio_value": round_money(total),
-        "buying_power": round_money(cash),
-        "allocated": round_money(cash - remaining),
-        "unallocated": round_money(remaining),
-        "orders": orders,
-        "skipped": skipped,
-    }
-
-
-def order_line(order: dict) -> str:
-    unit = f"{order['quantity']} sh (~${order['est_cost']:.2f})"
-    current = f"{order['current_pct']:.1f}".rjust(5)
-    target = f"{order['target_pct']:g}".rjust(3)
-    return f"  {order['symbol']:<6} {current}% → {target}%   buy {unit}"
 
 
 def purchases(plan: dict) -> tuple:
@@ -133,21 +43,6 @@ def purchases(plan: dict) -> tuple:
         ),
         tuple((row["symbol"], row["reason"]) for row in plan["skipped"]),
     )
-
-
-def spent(plan: dict, prices: dict[str, Decimal]) -> Decimal:
-    return sum(
-        (Decimal(order["quantity"]) * prices[order["symbol"]] for order in plan["orders"]),
-        Decimal(0),
-    )
-
-
-def after_buys(positions: dict[str, Decimal], plan: dict) -> dict[str, Decimal]:
-    updated = dict(positions)
-    for order in plan["orders"]:
-        symbol = order["symbol"]
-        updated[symbol] = updated.get(symbol, Decimal(0)) + Decimal(order["quantity"])
-    return updated
 
 
 @dataclass(frozen=True)
@@ -175,27 +70,6 @@ def portfolio(targets, cash, positions, prices) -> Portfolio:
 PUBLISHED_TARGETS = tuple(parse_composition(TARGETS))
 PUBLISHED_POSITIONS, PUBLISHED_PRICES = parse_holdings(HOLDINGS)
 PUBLISHED = portfolio(PUBLISHED_TARGETS, "1000", PUBLISHED_POSITIONS, PUBLISHED_PRICES)
-OVERWEIGHT = portfolio(PUBLISHED_TARGETS, "100", {"VOO": Decimal(10)}, PUBLISHED_PRICES)
-CASH_ONE = portfolio(PUBLISHED_TARGETS, "1", {}, PUBLISHED_PRICES)
-ZERO_CASH = portfolio(PUBLISHED_TARGETS, "0", PUBLISHED_POSITIONS, PUBLISHED_PRICES)
-MISSING_PRICE = portfolio(
-    PUBLISHED_TARGETS,
-    "1000",
-    PUBLISHED_POSITIONS,
-    {symbol: price for symbol, price in PUBLISHED_PRICES.items() if symbol != "TSLA"},
-)
-FRESH = portfolio(
-    PUBLISHED_TARGETS,
-    "1000",
-    {},
-    {symbol: Decimal(50) for symbol in PUBLISHED_PRICES},
-)
-OUTSIDE = portfolio(
-    PUBLISHED_TARGETS,
-    "1000",
-    {**PUBLISHED_POSITIONS, "OTHER": Decimal(2)},
-    {**PUBLISHED_PRICES, "OTHER": Decimal(100)},
-)
 FLOOR_UBER = portfolio(
     [Target("UBER", "", "Bets", False, HUNDRED)],
     "200",

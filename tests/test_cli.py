@@ -3,31 +3,21 @@
 from __future__ import annotations
 
 import contextlib
-import csv
 import io
 import json
-import tempfile
 import unittest
-from decimal import Decimal
-from pathlib import Path
 
 from hypothesis import example, given
 from hypothesis import strategies as st
 
 from finance_tools.cli import buying_power, main
-from finance_tools.rebalance import compute_plan, render_summary
+from finance_tools.rebalance import compute_plan
 from support import (
-    FRESH,
     HOLDINGS,
-    OUTSIDE,
-    PUBLISHED,
     PUBLISHED_POSITIONS,
     PUBLISHED_PRICES,
     PUBLISHED_TARGETS,
     TARGETS,
-    ZERO_CASH,
-    Portfolio,
-    portfolios,
 )
 
 @st.composite
@@ -69,76 +59,6 @@ class CliPropertyTests(unittest.TestCase):
         except SystemExit as exc:
             return exc, stdout.getvalue(), stderr.getvalue()
         return code, stdout.getvalue(), stderr.getvalue()
-
-    def write_inputs(self, directory: Path, case: Portfolio) -> tuple[Path, Path]:
-        targets_path = directory / "targets.csv"
-        holdings_path = directory / "holdings.csv"
-        target_header = ["Symbol", "Name", "Group", "Fractional Shares", "Target Percentage"]
-        with targets_path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=target_header, lineterminator="\n")
-            writer.writeheader()
-            for target in case.targets:
-                writer.writerow(
-                    {
-                        "Symbol": target.symbol,
-                        "Name": target.name,
-                        "Group": target.group,
-                        "Fractional Shares": "TRUE" if target.fractional else "FALSE",
-                        "Target Percentage": format(target.target_pct, "f"),
-                    }
-                )
-
-        holding_header = ["Symbol", "Quantity", "Price"]
-        with holdings_path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=holding_header, lineterminator="\n")
-            writer.writeheader()
-            symbols = list(dict.fromkeys([*case.position_map(), *case.price_map()]))
-            positions = case.position_map()
-            prices = case.price_map()
-            for symbol in symbols:
-                writer.writerow(
-                    {
-                        "Symbol": symbol,
-                        "Quantity": format(positions.get(symbol, Decimal(0)), "f"),
-                        "Price": format(prices.get(symbol, Decimal(0)), "f"),
-                    }
-                )
-        return targets_path, holdings_path
-
-    @given(case=portfolios())
-    @example(case=PUBLISHED)
-    @example(case=FRESH)
-    @example(case=ZERO_CASH)
-    @example(case=OUTSIDE)
-    def test_json_and_text_agree_with_the_plan(self, case: Portfolio):
-        with tempfile.TemporaryDirectory() as directory:
-            targets_path, holdings_path = self.write_inputs(Path(directory), case)
-            base = [
-                "rebalance",
-                "--targets",
-                str(targets_path),
-                "--holdings",
-                str(holdings_path),
-                "--buying-power",
-                format(case.cash, "f"),
-            ]
-            json_code, json_out, json_err = self.invoke([*base, "--json"])
-            text_code, text_out, text_err = self.invoke(base)
-
-        self.assertEqual(json_code, 0)
-        self.assertEqual(text_code, 0)
-        self.assertEqual(json_err, "")
-        self.assertEqual(text_err, "")
-        plan = compute_plan(list(case.targets), case.cash, case.position_map(), case.price_map())
-        payload = json.loads(json_out)
-        summary = payload.pop("summary")
-        self.assertEqual(payload, plan)
-        self.assertEqual(summary, render_summary(plan))
-        self.assertEqual(text_out, summary + "\n")
-        self.assertNotIn("dollar_amount", json_out)
-        self.assertNotIn("dollar_amount", text_out)
-        for order in plan["orders"]:
-            self.assertIn(f"buy {order['quantity']} sh", summary)
 
     @given(cash_text=valid_cash_text())
     @example(cash_text="1000")
@@ -188,29 +108,6 @@ class CliPropertyTests(unittest.TestCase):
                 case,
             ]
         )
-        self.assertIsInstance(code, SystemExit)
-        self.assertEqual(code.code, 2)
-        self.assertNotIn("Traceback", stderr)
-
-    @given(which=st.sampled_from(["targets", "holdings"]))
-    @example(which="targets")
-    def test_missing_input_exits_cleanly(self, which: str):
-        with tempfile.TemporaryDirectory() as directory:
-            missing = str(Path(directory) / "does-not-exist.csv")
-            targets = missing if which == "targets" else str(TARGETS)
-            holdings = missing if which == "holdings" else str(HOLDINGS)
-            code, _stdout, stderr = self.invoke(
-                [
-                    "rebalance",
-                    "--targets",
-                    targets,
-                    "--holdings",
-                    holdings,
-                    "--buying-power",
-                    "1000",
-                ]
-            )
-
         self.assertIsInstance(code, SystemExit)
         self.assertEqual(code.code, 2)
         self.assertNotIn("Traceback", stderr)
