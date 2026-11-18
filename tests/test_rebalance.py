@@ -13,14 +13,13 @@ import contextlib
 import csv
 import io
 import json
-import os
 import tempfile
 import unittest
 from dataclasses import dataclass
 from decimal import ROUND_HALF_EVEN, Decimal
 from pathlib import Path
 
-from hypothesis import HealthCheck, example, given, settings
+from hypothesis import example, given
 from hypothesis import strategies as st
 
 from finance_tools.cli import buying_power, main
@@ -32,29 +31,6 @@ from finance_tools.rebalance import (
     render_summary,
 )
 
-
-def _install_hypothesis_profile() -> None:
-    """Use a deterministic profile so CI does not depend on Hypothesis' seed.
-
-    The built-in ``ci`` profile already derandomizes and disables the deadline
-    when Hypothesis notices a CI environment. Re-registering it pins those
-    choices, and a bounded example count, in this suite. ``HYPOTHESIS_PROFILE``
-    still selects another registered profile when it is set.
-    """
-
-    settings.register_profile(
-        "ci",
-        derandomize=True,
-        deadline=None,
-        max_examples=100,
-        database=None,
-        print_blob=True,
-        suppress_health_check=[HealthCheck.too_slow],
-    )
-    settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
-
-
-_install_hypothesis_profile()
 
 ROOT = Path(__file__).resolve().parents[1]
 TARGETS = ROOT / "examples" / "targets.csv"
@@ -626,15 +602,6 @@ class ParseHelper(unittest.TestCase):
             path = Path(directory) / "input.csv"
             path.write_text(text, encoding="utf-8")
             return parser(path)
-
-
-class HypothesisProfileTests(unittest.TestCase):
-    def test_ci_profile_is_deterministic(self):
-        profile = settings.get_profile("ci")
-        self.assertTrue(profile.derandomize)
-        self.assertIsNone(profile.deadline)
-        self.assertEqual(profile.max_examples, 100)
-        self.assertIn(HealthCheck.too_slow, profile.suppress_health_check)
 
 
 class PlanPropertyTests(unittest.TestCase):
