@@ -3,9 +3,10 @@
   "skills": {
     "github-actions": {
       "source": "zehuac2/tech-skills",
+      "commit": "2e1109e1969dc16377ba08be38f15345eda2422d",
       "sourceType": "github",
       "skillPath": "skills/github-actions/SKILL.md",
-      "computedHash": "02bcb7eef8a5c78dca99fd65783dce47fa087b8cd14e70c5a5682e141274fc4c"
+      "computedHash": "87a0ca437e93d9684696177ee3499a2be6b8726ef18d2800bc56d6fa28e07d38"
     }
   }
 }
