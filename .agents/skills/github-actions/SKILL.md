@@ -15,6 +15,8 @@ General requirements:
 - Always use the latest version of an action. Pin only the major version. Do not
   pin the minor or patch version.
 - Set a sensible timeout for each job unless the user explicitly asks otherwise.
+- A Check workflow must run on pull requests and on every push to `main`. The
+  push run catches breakage after a merge and keeps the status of `main` green.
 
 Each workflow type has its own requirements. See these pages:
 
